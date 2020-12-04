@@ -85,18 +85,20 @@ class WarehouseEnv(gym.Env):
         reward = 0
         if self.agent_state[agent] == self.agent_goal[agent]:
             reward = 1
-            self.agent_goal[agent] = None
+            self.assign_goal(agent, (np.random.randint(0,R), np.random.randint(0,C))) #Assign new goal
             done = True #Done should be true when the agent gets to a goal
         else:
             done = False
         return observation, reward, done, {}
+    
+            
 
     def action2dir(self, action):
-        checking_table = {Action.NOOP: (0, 0), Action.RIGHT: (0, 1), Action.UP: (1, 0), Action.LEFT: (0, -1), Action.DOWN: (-1, 0)}
+        checking_table = {Action.NOOP: (0, 0), Action.RIGHT: (0, 1), Action.UP: (-1, 0), Action.LEFT: (0, -1), Action.DOWN: (1, 0)}
         return checking_table[action]
     
     def dir2action(self,direction):
-        checking_table = {(0, 0): Action.NOOP, (0, 1): Action.RIGHT, (1, 0): Action.UP, (0, -1): Action.LEFT, (-1, 0): Action.DOWN}
+        checking_table = {(0, 0): Action.NOOP, (0, 1): Action.RIGHT, (-1, 0): Action.UP, (0, -1): Action.LEFT, (1, 0): Action.DOWN}
         return checking_table[direction]
 
     def listValidActions(self, agent): #this function is used on PRIMAL 2

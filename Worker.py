@@ -170,16 +170,7 @@ class Worker():
                 
                 s = joint_observations[self.metaAgentID][self.agentID]
                 s[0] = self.env.obstacle_map #Substitute agent map for obstacle map
-                goal_vector = []
-                goal_vector.append(self.env.agent_goal[self.agentID-1][0] - self.env.agent_state[self.agentID-1][0])
-                goal_vector.append(self.env.agent_goal[self.agentID-1][1] - self.env.agent_state[self.agentID-1][1])
-                goal_vector.append((goal_vector[0] ** 2 + goal_vector[1] ** 2) ** .5)
-                
-                if goal_vector[2] != 0:
-                    goal_vector[0] = goal_vector[0] / goal_vector[2]
-                    goal_vector[1] = goal_vector[1] / goal_vector[2]
-                if goal_vector[2] > 60:
-                    goal_vector[2] = 60
+                goal_vector = self.goal_vector_calc(self.agentID)
                 
                 
 
@@ -271,6 +262,7 @@ class Worker():
 
                         # Update State
                         s = s1
+                        goal_vector = self.goal_vector_calc(self.agentID)
 
                         # If the episode hasn't ended, but the experience buffer is full, then we
                         # make an update step using that experience rollout.
@@ -290,8 +282,8 @@ class Worker():
 
                             else:
                                 s1Value = self.sess.run(self.local_AC.value,
-                                                   feed_dict={self.local_AC.inputs     : np.array([s[0]]),
-                                                              self.local_AC.goal_pos   : [s[1]],
+                                                   feed_dict={self.local_AC.inputs     : np.array([s]),
+                                                              self.local_AC.goal_pos   : [goal_vector],
                                                               self.local_AC.state_in[0]: rnn_state[0],
                                                               self.local_AC.state_in[1]: rnn_state[1]})[0, 0]
 
@@ -388,6 +380,9 @@ class Worker():
         train_imitation  ={} 
         targets_done     = 0 
         saveGIF          = False 
+        all_obs = []
+        all_goal_vectors = []
+        goal_vector = {}
 
         if np.random.rand() < IL_GIF_PROB : 
             saveGIF    =True     
@@ -400,6 +395,8 @@ class Worker():
 
         for agentID in range(1, self.num_workers + 1):
             o[agentID] = self.env._observe(agentID-1)
+            o[agentID][0] = self.env.obstacle_map
+            goal_vector[agentID] = self.goal_vector_calc(agentID)
             train_imitation[agentID] = 1 
         step_count = 0
         print("Aquit dodo vien")
@@ -417,17 +414,29 @@ class Worker():
                 completed_agents =[] 
                 start_positions =[] 
                 goals =[] 
+                
+                print("nuevo--------")
+                print(path)
                 for i in range(self.num_workers):
                     agent_id = i+1
                     next_pos = path[path_step][i]
                     diff = self.tuple_minus(next_pos, self.env.agent_state[agent_id-1])
+                    
+                    print(diff)
+                    print(next_pos)
+                    print(self.env.agent_state[agent_id-1])
+                    
                     actions[agent_id] = self.env.dir2action(diff)
+                    print(actions[agent_id])
 
                 for i in range(self.num_workers) :
                     agent_id = i+1
-                    obs, _, done, _ = self.env.step(agent_id-1, actions[i])
+                    obs, r, done, _ = self.env.step(agent_id-1, actions[agent_id])
+                    obs[0] = self.env.obstacle_map
+                    goal = self.goal_vector_calc(agent_id)
                     all_obs.append(obs)
-                    result[i].append([o[agent_id][0], o[agent_id][1], actions[agent_id],train_imitation[agent_id]])
+                    all_goal_vectors.append(goal)
+                    result[i].append([o[agent_id], goal_vector[agent_id], actions[agent_id].value,train_imitation[agent_id]])
                     if done:
                         completed_agents.append(i) 
                         targets_done +=1 
@@ -467,6 +476,7 @@ class Worker():
                                 return result,targets_done  
                     path_step = 0
                 o = all_obs
+                goal_vector = all_goal_vectors
                 step_count += 1
                 path_step += 1
                 new_call = False
@@ -540,3 +550,17 @@ class Worker():
     def tuple_minus(self, a, b):
         """ a - b """
         return tuple(map(sub, a, b))
+    
+    def goal_vector_calc(self, agentID):
+        goal_vector = []
+        goal_vector.append(self.env.agent_goal[agentID-1][0] - self.env.agent_state[agentID-1][0])
+        goal_vector.append(self.env.agent_goal[agentID-1][1] - self.env.agent_state[agentID-1][1])
+        goal_vector.append((goal_vector[0] ** 2 + goal_vector[1] ** 2) ** .5)
+        
+        if goal_vector[2] != 0:
+            goal_vector[0] = goal_vector[0] / goal_vector[2]
+            goal_vector[1] = goal_vector[1] / goal_vector[2]
+        if goal_vector[2] > 60:
+            goal_vector[2] = 60
+            
+        return goal_vector
