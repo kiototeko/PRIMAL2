@@ -184,7 +184,8 @@ def main():
 
 
                 # Write ratio of RL to IL episodes to tensorboard
-                writeEpisodeRatio(global_summary, numImitationEpisodes, numRLEpisodes, sess, curr_episode)
+                
+                #writeEpisodeRatio(global_summary, numImitationEpisodes, numRLEpisodes, sess, curr_episode)
 
                 
                 if JOB_TYPE == JOB_OPTIONS.getGradient:

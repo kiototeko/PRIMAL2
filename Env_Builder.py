@@ -898,6 +898,9 @@ class MAPFEnv(gym.Env):
             start_positions.append(start_positions_dir[i])
             goals.append(goals_dir[i])
         mstar_path = None
+        print('World', world)
+        print('Start Pos', start_positions)
+        print('Goals', goals)
         start_time = time.time()
         try:
             max_time += time_limit

@@ -21,10 +21,10 @@ OBSTACLE_DENSITY        = (0, 0.75)  # range of densities   Starting Params of C
 
 DIAG_MVMT               = False  # Diagonal movements allowed?
 a_size                  = 5 + int(DIAG_MVMT) * 4
-NUM_META_AGENTS         = 9
-NUM_IL_META_AGENTS      = 4
+NUM_META_AGENTS         = 5
+NUM_IL_META_AGENTS      = 2
 
-NUM_THREADS             = 8 # int(multiprocessing.cpu_count() / (2 * NUM_META_AGENTS))
+NUM_THREADS             = 2 # int(multiprocessing.cpu_count() / (2 * NUM_META_AGENTS))
 NUM_BUFFERS             = 1  # NO EXPERIENCE REPLAY int(NUM_THREADS / 2)
 
 # training parameters
@@ -46,7 +46,7 @@ PRIMING_LENGTH          = 0   # number of episodes at the beginning to train onl
 MSTAR_CALL_FREQUENCY    = 1
 
 # observation variables
-NUM_CHANNEL             = 8 + NUM_FUTURE_STEPS
+NUM_CHANNEL             = 4
 
 # others
 EPISODE_START           = episode_count

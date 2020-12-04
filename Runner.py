@@ -3,6 +3,7 @@ import threading
 import numpy as np
 import ray
 import os
+from warehouse_env import WarehouseEnv
 
 from Ray_ACNet import ACNet
 import GroupLock
@@ -27,6 +28,14 @@ class Runner(object):
         import tensorflow as tf
         
         num_agents = NUM_THREADS
+        
+        obstacle_map = np.zeros((11,11))
+        obstacle_map[5,5] = 1
+        agent_map = np.zeros((11,11))
+        agent_map[1,1] = 1
+        agent_map[8,8] = 1
+        self.env = WarehouseEnv(obstacle_map = obstacle_map, agent_map = agent_map) #Hardcoded maps for now
+        """
         self.env = Primal2Env(num_agents=num_agents,
                               observer=Primal2Observer(observation_size=OBS_SIZE,
                                                         num_future_steps=NUM_FUTURE_STEPS),
@@ -36,7 +45,7 @@ class Runner(object):
                                    obstacle_density=OBSTACLE_DENSITY),
                               IsDiagonal=DIAG_MVMT,
                                isOneShot=False)
-        
+        """
         self.metaAgentID = metaAgentID
 
         trainer = None
@@ -198,15 +207,27 @@ class Runner(object):
         }
 
         return jobResults, metrics, info
-
-
-@ray.remote(num_cpus=3, num_gpus= 1.0 / (NUM_META_AGENTS - NUM_IL_META_AGENTS + 1))
+    
+@ray.remote(num_cpus=2.0/(NUM_META_AGENTS - NUM_IL_META_AGENTS))
 class RLRunner(Runner):
     def __init__(self, metaAgentID):        
         super().__init__(metaAgentID)
 
 
-@ray.remote(num_cpus=1, num_gpus=0)
+@ray.remote(num_cpus=1.0/NUM_IL_META_AGENTS, num_gpus=0)
 class imitationRunner(Runner):
     def __init__(self, metaAgentID):        
         super().__init__(metaAgentID)
+
+"""
+@ray.remote(num_cpus=2.0/(NUM_META_AGENTS - NUM_IL_META_AGENTS))
+class RLRunner(Runner):
+    def __init__(self, metaAgentID):        
+        super().__init__(metaAgentID)
+
+
+@ray.remote(num_cpus=1.0/NUM_IL_META_AGENTS, num_gpus=0)
+class imitationRunner(Runner):
+    def __init__(self, metaAgentID):        
+        super().__init__(metaAgentID)
+"""

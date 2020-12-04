@@ -6,6 +6,7 @@ import ray
 import os
 import imageio
 from Env_Builder import *
+from warehouse_env import Action
 
 from Map_Generator2 import maze_generator
 
@@ -116,7 +117,7 @@ class Worker():
 
 
     def imitation_learning_only(self, episode_count):        
-        self.env._reset()
+        self.env.reset()
         rollouts, targets_done = self.parse_path(episode_count)
 
         if rollouts is None:
@@ -158,15 +159,29 @@ class Worker():
             
                 # Initial state from the environment
                 if self.agentID == 1:
-                    self.env._reset()
-                    joint_observations[self.metaAgentID] = self.env._observe()
+                    self.env.reset()
+                    for i in range(1, self.num_workers+1):
+                        joint_observations[self.metaAgentID][i] = self.env._observe(i-1)
 
                 self.synchronize()  # synchronize starting time of the threads
 
                 # Get Information For Each Agent 
-                validActions = self.env.listValidActions(self.agentID,joint_observations[self.metaAgentID][self.agentID])
+                validActions = self.env.listValidActions(self.agentID-1) #Should we just ignore validActions?
                 
                 s = joint_observations[self.metaAgentID][self.agentID]
+                s[0] = self.env.obstacle_map #Substitute agent map for obstacle map
+                goal_vector = []
+                goal_vector.append(self.env.agent_goal[self.agentID-1][0] - self.env.agent_state[self.agentID-1][0])
+                goal_vector.append(self.env.agent_goal[self.agentID-1][1] - self.env.agent_state[self.agentID-1][1])
+                goal_vector.append((goal_vector[0] ** 2 + goal_vector[1] ** 2) ** .5)
+                
+                if goal_vector[2] != 0:
+                    goal_vector[0] = goal_vector[0] / goal_vector[2]
+                    goal_vector[1] = goal_vector[1] / goal_vector[2]
+                if goal_vector[2] > 60:
+                    goal_vector[2] = 60
+                
+                
 
                 rnn_state = self.local_AC.state_init
                 rnn_state0 = rnn_state
@@ -196,13 +211,13 @@ class Worker():
                         GIF_frames = [self.env._render()]
 
                     # start RL
-                    self.env.finished = False
-                    while not self.env.finished:
+                    finished = False
+                    while not finished:
                         a_dist, v, rnn_state = self.sess.run([self.local_AC.policy,
                                                          self.local_AC.value,
                                                          self.local_AC.state_out],
-                                                        feed_dict={self.local_AC.inputs     : [s[0]],  # state
-                                                                   self.local_AC.goal_pos   : [s[1]],  # goal vector
+                                                        feed_dict={self.local_AC.inputs     : [s],  # state
+                                                                   self.local_AC.goal_pos   : [goal_vector],  # goal vector
                                                                    self.local_AC.state_in[0]: rnn_state[0],
                                                                    self.local_AC.state_in[1]: rnn_state[1]})
 
@@ -210,6 +225,7 @@ class Worker():
                         train_policy = train_val = 1 
                        
                         if not skipping_state :
+                            print(validActions)
                             if not (np.argmax(a_dist.flatten()) in validActions):
                                 episode_inv_count += 1
                                 train_val = 0 
@@ -229,11 +245,11 @@ class Worker():
                         self.synchronize()
 
                         if self.agentID == 1:
-                            all_obs, all_rewards = self.env.step_all(joint_actions[self.metaAgentID])
                             for i in range(1, self.num_workers+1):
-                                joint_observations[self.metaAgentID][i] = all_obs[i]
-                                joint_rewards[self.metaAgentID][i]      = all_rewards[i]
-                                joint_done[self.metaAgentID][i]         = (self.env.world.agents[i].status ==1)
+                                obs, reward, done, _ = self.env.step(self.agentID-1, Action(joint_actions[self.metaAgentID][i]))
+                                joint_observations[self.metaAgentID][i] = obs
+                                joint_rewards[self.metaAgentID][i]      = reward
+                                joint_done[self.metaAgentID][i]         = done
                             if saveGIF and self.agentID == 1:
                                 GIF_frames.append(self.env._render())
 
@@ -241,14 +257,14 @@ class Worker():
 
                         # Get observation,reward, valid actions for each agent 
                         s1           = joint_observations[self.metaAgentID][self.agentID]
+                        s1[0] = self.env.obstacle_map #Substitute agent map for obstacle map
                         r            = copy.deepcopy(joint_rewards[self.metaAgentID][self.agentID]) 
-                        validActions = self.env.listValidActions(self.agentID, s1)
+                        validActions = self.env.listValidActions(self.agentID-1)
 
-                        
                         self.synchronize() 
                         # Append to Appropriate buffers 
                         if not skipping_state :
-                            episode_buffer.append([s[0], a, joint_rewards[self.metaAgentID][self.agentID] , s1, v[0, 0], train_valid, s[1], train_val,train_policy])
+                            episode_buffer.append([s, a, joint_rewards[self.metaAgentID][self.agentID] , s1, v[0, 0], train_valid, goal_vector, train_val,train_policy])
                             episode_values.append(v[0, 0])
                         episode_reward += r
                         episode_step_count += 1
@@ -382,13 +398,14 @@ class Worker():
         new_call       = False 
         new_MSTAR_call = False 
 
-        all_obs = self.env._observe()
         for agentID in range(1, self.num_workers + 1):
-            o[agentID] = all_obs[agentID]
+            o[agentID] = self.env._observe(agentID-1)
             train_imitation[agentID] = 1 
-        step_count = 0 
+        step_count = 0
+        print("Aquit dodo vien")
         while step_count <= IL_MAX_EP_LENGTH :
-            path = self.env.expert_until_first_goal()
+            print("Aquit dodo sigue")
+            path = self.expert_until_first_goal()
             if path is None:  # solution not exists
                 if step_count !=0 :
                     return result,targets_done
@@ -403,14 +420,15 @@ class Worker():
                 for i in range(self.num_workers):
                     agent_id = i+1
                     next_pos = path[path_step][i]
-                    diff = tuple_minus(next_pos, self.env.world.getPos(agent_id))
-                    actions[agent_id] = dir2action(diff)
+                    diff = self.tuple_minus(next_pos, self.env.agent_state[agent_id-1])
+                    actions[agent_id] = self.env.dir2action(diff)
 
-                all_obs, _ = self.env.step_all(actions)
                 for i in range(self.num_workers) :
                     agent_id = i+1
+                    obs, _, done, _ = self.env.step(agent_id-1, actions[i])
+                    all_obs.append(obs)
                     result[i].append([o[agent_id][0], o[agent_id][1], actions[agent_id],train_imitation[agent_id]])
-                    if self.env.world.agents[agent_id].status == 1:
+                    if done:
                         completed_agents.append(i) 
                         targets_done +=1 
                         single_done = True 
@@ -421,7 +439,7 @@ class Worker():
                 if saveGIF and OUTPUT_IL_GIFS:   
                     GIF_frames.append(self.env._render())     
                 if single_done and new_MSTAR_call :
-                    path = self.env.expert_until_first_goal()   
+                    path = self.expert_until_first_goal()   
                     if path is None :
                         return result, targets_done
                     path_step = 0 
@@ -435,17 +453,16 @@ class Worker():
                            path = path[:-1]  
                     except :
                         assert(len(path)<=2)        
-                    start_positions_dir = self.env.getPositions()
-                    goals_dir = self.env.getGoals()
-                    for i in range(1, self.env.world.num_agents + 1):
-                        start_positions.append(start_positions_dir[i])
-                        goals.append(goals_dir[i])
-                    world =self.env.getObstacleMap()         
+
+                    for i in range(1, self.num_workers + 1):
+                        start_positions.append(self.env.agent_state[i-1])
+                        goals.append(self.env.agent_goal[i])
+                    world =self.env.obstacle_map    
                    # print('OLD PATH', path) # print('CURRENT POSITIONS', start_positions) # print('CURRENT GOALS',goals) # print('WORLD',world)
                     try :
                         path = priority_planner(world,tuple(start_positions),tuple(goals),path )
                     except :
-                        path = self.env.expert_until_first_goal()  
+                        path = self.expert_until_first_goal()  
                         if path == None :
                                 return result,targets_done  
                     path_step = 0
@@ -464,3 +481,62 @@ class Worker():
         if TRAINING:
             return not coord.should_stop()
 
+
+    def expert_until_first_goal(self, inflation=2.0, time_limit=60.0):
+    
+        world = self.env.obstacle_map
+        start_positions = []
+        goals = []
+        for i in range(1, self.num_workers + 1):
+            start_positions.append(self.env.agent_state[i-1])
+            goals.append(self.env.agent_goal[i-1])
+        mstar_path = None
+        start_time = time.time()
+       
+        try:
+            max_time += time_limit
+
+            mstar_path = cpp_mstar.find_path(world, start_positions, goals, inflation, time_limit/5.0)
+            print(mstar_path)
+
+        except OutOfTimeError:
+            # M* timed out
+            print("timeout")
+            print('World', world)
+            print('Start Pos', start_positions)
+            print('Goals', goals)
+        except NoSolutionError:
+            print("nosol????")
+            print('World', world)
+            print('Start Pos', start_positions)
+            print('Goals', goals)
+
+        except:
+            c_time = time.time() - start_time
+            if c_time > time_limit:
+                return mstar_path
+
+            #print("cpp_mstar crash most likely... trying python mstar instead")
+            try:
+                mstar_path = od_mstar.find_path(world, start_positions, goals,
+                                                inflation=inflation, time_limit=time_limit)
+            except OutOfTimeError:
+                # M* timed out
+                print("timeout")
+                print('World', world)
+                print('Start Pos', start_positions)
+                print('Goals', goals)
+            except NoSolutionError:
+                print("nosol????")
+                print('World2', world)
+                print('Start Pos2', start_positions)
+                print('Goals2', goals)
+            except:
+                print("Unknown bug?!")
+
+        return mstar_path
+
+
+    def tuple_minus(self, a, b):
+        """ a - b """
+        return tuple(map(sub, a, b))
