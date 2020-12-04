@@ -8,10 +8,6 @@ from warehouse_env import WarehouseEnv
 from Ray_ACNet import ACNet
 import GroupLock
 
-from Primal2Env import Primal2Env
-from Primal2Observer import Primal2Observer
-from Map_Generator2 import maze_generator
-
 from Worker import Worker
 import scipy.signal as signal
 
