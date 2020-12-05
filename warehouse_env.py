@@ -63,6 +63,13 @@ class WarehouseEnv(gym.Env):
 
     def assign_goal(self, agent, goal):
         self.agent_goal[agent] = goal
+    
+    def random_without_repetition(self, from_list): #random goal positions without repeting
+        R, C = self.agent_map.shape
+        while True:
+            r=(np.random.randint(0,R),np.random.randint(0,C))
+            if r not in from_list: 
+                return r
 
     def step(self, agent, action):
         row, col = self.agent_state[agent]
@@ -85,7 +92,8 @@ class WarehouseEnv(gym.Env):
         reward = 0
         if self.agent_state[agent] == self.agent_goal[agent]:
             reward = 1
-            self.assign_goal(agent, (np.random.randint(0,R), np.random.randint(0,C))) #Assign new goal
+            goal = self.random_without_repetition(self.agent_goal.values()) 
+            self.assign_goal(agent, goal) #Assign new goal
             done = True #Done should be true when the agent gets to a goal
         else:
             done = False
@@ -125,10 +133,10 @@ class WarehouseEnv(gym.Env):
     def reset(self):
         self.agent_state = {}
         self.agent_goal = {}
-        R, C = self.agent_map.shape
         for i, (row, col) in enumerate(np.transpose(np.nonzero(self.agent_map))):
             self.agent_state[i] = (row, col)
-            self.agent_goal[i] = (np.random.randint(0,R), np.random.randint(0,C))
+            goal = self.random_without_repetition(self.agent_goal.values()) 
+            self.assign_goal(i, goal) #Assign new goal
         #return self._observe() the _observe() function has as an argument an agent
 
     def render(self, mode="human"):

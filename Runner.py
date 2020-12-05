@@ -4,6 +4,7 @@ import numpy as np
 import ray
 import os
 from warehouse_env import WarehouseEnv
+import random
 
 from Ray_ACNet import ACNet
 import GroupLock
@@ -25,12 +26,22 @@ class Runner(object):
         
         num_agents = NUM_THREADS
         
-        obstacle_map = np.zeros((11,11))
-        obstacle_map[5,5] = 1
-        agent_map = np.zeros((11,11))
-        agent_map[1,1] = 1
-        agent_map[8,8] = 1
-        self.env = WarehouseEnv(obstacle_map = obstacle_map, agent_map = agent_map) #Hardcoded maps for now
+        map_size = 11
+        obstacle_map = np.zeros((map_size,map_size))
+        obstacle_map[5,5] = 1 #Hardcoded obstacle
+        agent_map = np.zeros((map_size,map_size))
+        
+        locations_list = []
+        num_agents = 2
+        i = 0
+        while i < num_agents: #random start positions
+            r=(np.random.randint(0,map_size),np.random.randint(0,map_size))
+            if r not in locations_list: 
+                locations_list.append(r)
+                agent_map[r] = 1
+                i += 1
+
+        self.env = WarehouseEnv(obstacle_map = obstacle_map, agent_map = agent_map) 
         """
         self.env = Primal2Env(num_agents=num_agents,
                               observer=Primal2Observer(observation_size=OBS_SIZE,
