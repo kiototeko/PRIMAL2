@@ -9,7 +9,9 @@
 ## Running Code
 - Pick appropriate number of meta agents via variables `NUM_META_AGENTS` and `NUM_IL_META_AGENTS` in `parameters.py`
 - The number of RL meta-agents is implicity defined by the difference between total meta-agents and IL meta-agents (`NUM_RL_META_AGENTS` = `NUM_META_AGENTS` - `NUM_IL_META_AGENTS`)
+- `NUM_THREADS` defines the number of agents in the map
 - Name training run via `training_version` in `parameters.py`
+- At the end of `Runner.py` it is important to notice that you can define how many CPUs or GPUs you assign to either imitation or reinforcement learning agents
 - call `python driver.py`
 
 ## Key Files
@@ -18,11 +20,7 @@
 - `Runner.py` - Compute node for training. Maintains a single meta agent.
 - `Worker.py` - A single agent in a simulation environment. Majority of episode computation, including gradient calculation, occurs here.
 - `Ray_ACNet.py` - Defines network architecture.
-- `Env_Builder.py` - Defines the lower level structure of the Lifelong MAPF environment for PRIMAL2, including the world and agents class.
-- `PRIMAL2Env.py` - Defines the high level environment class. 
-- `Map_Generator2.py` - Algorithm used to generate worlds, parameterized by world size, obstacle density and wall components.
-- `PRIMAL2Observer.py` - Defines the decentralized observation of each PRIMAL2 agent.
-- `Obsever_Builder.py` - The high level observation class
+- `warehouse_env.py` - Defines the environment
 
 
 ## Other Links
