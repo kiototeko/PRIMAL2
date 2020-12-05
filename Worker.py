@@ -220,7 +220,6 @@ class Worker():
                         train_policy = train_val = 1 
                        
                         if not skipping_state :
-                            print(validActions)
                             if not (np.argmax(a_dist.flatten()) in validActions):
                                 episode_inv_count += 1
                                 train_val = 0 
@@ -403,9 +402,7 @@ class Worker():
             goal_vector[agentID] = self.goal_vector_calc(agentID)
             train_imitation[agentID] = 1 
         step_count = 0
-        print("Aquit dodo vien")
         while step_count <= IL_MAX_EP_LENGTH :
-            print("Aquit dodo sigue")
             path = self.expert_until_first_goal()
             if path is None:  # solution not exists
                 if step_count !=0 :
@@ -419,36 +416,43 @@ class Worker():
                 start_positions =[] 
                 goals =[] 
                 
-                print("nuevo--------")
-                print(path)
                 for i in range(self.num_workers):
                     agent_id = i+1
                     next_pos = path[path_step][i]
                     diff = self.tuple_minus(next_pos, self.env.agent_state[agent_id-1])
                     
-                    print(diff)
-                    print(next_pos)
-                    print(self.env.agent_state[agent_id-1])
                     
                     actions[agent_id] = self.env.dir2action(diff)
-                    print(actions[agent_id])
 
-                for i in range(self.num_workers) :
-                    agent_id = i+1
-                    obs, r, done, _ = self.env.step(agent_id-1, actions[agent_id])
-                    obs[0] = self.env.obstacle_map
-                    goal = self.goal_vector_calc(agent_id)
-                    all_obs.append(obs)
-                    all_goal_vectors.append(goal)
-                    result[i].append([o[agent_id], goal_vector[agent_id], actions[agent_id].value,train_imitation[agent_id]])
-                    if done:
-                        completed_agents.append(i) 
-                        targets_done +=1 
-                        single_done = True 
-                        if targets_done% MSTAR_CALL_FREQUENCY ==0 :
-                            new_MSTAR_call = True 
-                        else :     
-                            new_call = True 
+                repeat_agents = list(range(self.num_workers))
+                while repeat_agents:
+                    for i in range(self.num_workers) :
+                        
+                        if(i not in repeat_agents):
+                            continue
+                        
+                        agent_id = i+1
+                        
+                        pre_state = self.env.agent_state[agent_id-1]
+                        obs, r, done, _ = self.env.step(agent_id-1, actions[agent_id])
+                        if self.env.agent_state[agent_id-1] == pre_state and not actions[agent_id] == Action.NOOP: #this means that the agent couldn't move although it should
+                            continue
+                        else:
+                            repeat_agents.remove(agent_id-1)
+                            
+                        obs[0] = self.env.obstacle_map
+                        goal = self.goal_vector_calc(agent_id)
+                        all_obs.append(obs)
+                        all_goal_vectors.append(goal)
+                        result[i].append([o[agent_id], goal_vector[agent_id], actions[agent_id].value,train_imitation[agent_id]])
+                        if done:
+                            completed_agents.append(i) 
+                            targets_done +=1 
+                            single_done = True 
+                            if targets_done% MSTAR_CALL_FREQUENCY ==0 :
+                                new_MSTAR_call = True 
+                            else :     
+                                new_call = True 
                 if saveGIF and OUTPUT_IL_GIFS:   
                     GIF_frames.append(self.env._render())     
                 if single_done and new_MSTAR_call :
@@ -511,7 +515,6 @@ class Worker():
             max_time += time_limit
 
             mstar_path = cpp_mstar.find_path(world, start_positions, goals, inflation, time_limit/5.0)
-            print(mstar_path)
 
         except OutOfTimeError:
             # M* timed out
