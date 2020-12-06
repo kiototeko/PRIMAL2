@@ -184,8 +184,7 @@ def main():
 
 
                 # Write ratio of RL to IL episodes to tensorboard
-                
-                #writeEpisodeRatio(global_summary, numImitationEpisodes, numRLEpisodes, sess, curr_episode)
+                writeEpisodeRatio(global_summary, numImitationEpisodes, numRLEpisodes, sess, curr_episode)
 
                 
                 if JOB_TYPE == JOB_OPTIONS.getGradient:
@@ -211,6 +210,7 @@ def main():
                 weight_names = tf.trainable_variables()
                 weights = sess.run(weight_names)
                 curr_episode += 1
+
 
                 # start a new job on the recently completed agent with the updated weights
                 jobList.extend([meta_agents[info['id']].job.remote(weights, curr_episode)])

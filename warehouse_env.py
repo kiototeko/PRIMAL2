@@ -66,9 +66,10 @@ class WarehouseEnv(gym.Env):
     
     def random_without_repetition(self, from_list): #random goal positions without repeting
         R, C = self.agent_map.shape
+        obstacles = [(row,col) for row,col in np.transpose(np.nonzero(self.obstacle_map))]
         while True:
             r=(np.random.randint(0,R),np.random.randint(0,C))
-            if r not in from_list: 
+            if r not in from_list and r not in obstacles:
                 return r
 
     def step(self, agent, action):

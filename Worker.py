@@ -120,7 +120,8 @@ class Worker():
 
 
 
-    def imitation_learning_only(self, episode_count):        
+    def imitation_learning_only(self, episode_count):      
+        #print("start imitation")
         self.env.reset()
         rollouts, targets_done = self.parse_path(episode_count)
 
@@ -137,6 +138,7 @@ class Worker():
             gradients.append(grads)
             losses.append(imitation_loss)
 
+        #print("done imitation")
         return gradients, losses
 
     
@@ -425,6 +427,11 @@ class Worker():
                     actions[agent_id] = self.env.dir2action(diff)
 
                 repeat_agents = list(range(self.num_workers))
+                #print("here")
+                #print(path)
+                #print(self.env.agent_state)
+                #print(actions)
+                #print(repeat_agents)
                 while repeat_agents:
                     for i in range(self.num_workers) :
                         
@@ -436,9 +443,17 @@ class Worker():
                         pre_state = self.env.agent_state[agent_id-1]
                         obs, r, done, _ = self.env.step(agent_id-1, actions[agent_id])
                         if self.env.agent_state[agent_id-1] == pre_state and not actions[agent_id] == Action.NOOP: #this means that the agent couldn't move although it should
+                            """
+                            print(path)
+                            print(actions[agent_id])
+                            print(self.env.agent_state[agent_id-1])
+                            print(pre_state)
+                            print("not done")
+                            """
                             continue
                         else:
                             repeat_agents.remove(agent_id-1)
+                 
                             
                         obs[0] = self.env.obstacle_map
                         goal = self.goal_vector_calc(agent_id)
@@ -446,6 +461,7 @@ class Worker():
                         all_goal_vectors.append(goal)
                         result[i].append([o[agent_id], goal_vector[agent_id], actions[agent_id].value,train_imitation[agent_id]])
                         if done:
+                            
                             completed_agents.append(i) 
                             targets_done +=1 
                             single_done = True 
@@ -453,6 +469,7 @@ class Worker():
                                 new_MSTAR_call = True 
                             else :     
                                 new_call = True 
+                #print("there")
                 if saveGIF and OUTPUT_IL_GIFS:   
                     GIF_frames.append(self.env._render())     
                 if single_done and new_MSTAR_call :

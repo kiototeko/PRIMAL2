@@ -215,18 +215,18 @@ class Runner(object):
 
         return jobResults, metrics, info
     
-@ray.remote(num_cpus=2.0/(NUM_META_AGENTS - NUM_IL_META_AGENTS))
+@ray.remote(num_cpus=2.0/(NUM_META_AGENTS - NUM_IL_META_AGENTS)) #change this parameter according to your computer
 class RLRunner(Runner):
     def __init__(self, metaAgentID):        
         super().__init__(metaAgentID)
 
 
-@ray.remote(num_cpus=1.0/NUM_IL_META_AGENTS, num_gpus=0)
+@ray.remote(num_cpus=0.5/NUM_IL_META_AGENTS) #change this parameter according to your computer
 class imitationRunner(Runner):
     def __init__(self, metaAgentID):        
         super().__init__(metaAgentID)
 
-"""
+""" Original
 @ray.remote(num_cpus=2.0/(NUM_META_AGENTS - NUM_IL_META_AGENTS))
 class RLRunner(Runner):
     def __init__(self, metaAgentID):        
