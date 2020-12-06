@@ -29,6 +29,7 @@ class Runner(object):
         map_size = 11
         obstacle_map = np.zeros((map_size,map_size))
         obstacle_map[5,5] = 1 #Hardcoded obstacle
+        obstacles = [(row,col) for row,col in np.transpose(np.nonzero(obstacle_map))]
         agent_map = np.zeros((map_size,map_size))
         
         locations_list = []
@@ -36,7 +37,7 @@ class Runner(object):
         i = 0
         while i < num_agents: #random start positions
             r=(np.random.randint(0,map_size),np.random.randint(0,map_size))
-            if r not in locations_list: 
+            if r not in locations_list and r not in obstacles: 
                 locations_list.append(r)
                 agent_map[r] = 1
                 i += 1
