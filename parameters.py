@@ -1,4 +1,5 @@
 import numpy as np
+
 # Learning parameters
 
 gamma                   = .95  # discount rate for advantage estimation and reward discounting

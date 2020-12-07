@@ -21,7 +21,7 @@ def normalized_columns_initializer(std=1.0):
 
 
 class ACNet:
-    def __init__(self, scope, a_size, trainer, TRAINING, NUM_CHANNEL, OBS_SIZE, GLOBAL_NET_SCOPE, GLOBAL_NETWORK=False):
+    def __init__(self, scope, a_size, trainer, TRAINING, NUM_CHANNEL, OBS_SIZE, GLOBAL_NET_SCOPE, GLOBAL_NETWORK=False, RELATIONAL_LEARNING=False):
         with tf.variable_scope(str(scope) + '/qvalues'):
             self.trainer = trainer
             # The input size may require more work to fit the interface.
@@ -29,7 +29,7 @@ class ACNet:
             self.goal_pos = tf.placeholder(shape=[None, 3], dtype=tf.float32)
             self.myinput = tf.transpose(self.inputs, perm=[0, 2, 3, 1])
             self.policy, self.value, self.state_out, self.state_in, self.state_init, self.valids = self._build_net(
-                self.myinput, self.goal_pos, RNN_SIZE, TRAINING, a_size)
+                self.myinput, self.goal_pos, RNN_SIZE, TRAINING, a_size, RELATIONAL_LEARNING)
         if TRAINING:
             self.actions = tf.placeholder(shape=[None], dtype=tf.int32)
             self.actions_onehot = tf.one_hot(self.actions, a_size, dtype=tf.float32)
@@ -110,7 +110,7 @@ class ACNet:
             
         print("Hello World... From  " + str(scope))  # :)
 
-    def _build_net(self, inputs, goal_pos, RNN_SIZE, TRAINING, a_size):
+    def _build_net(self, inputs, goal_pos, RNN_SIZE, TRAINING, a_size, RELATIONAL_LEARNING):
         def conv_mlp(inputs, kernal_size, output_size):
             inputs = tf.reshape(inputs, [-1, 1, kernal_size, 1])
             conv = layers.conv2d(inputs=inputs, padding="VALID", num_outputs=output_size,
@@ -132,13 +132,71 @@ class ACNet:
             conv1b = conv_2d(conv1a, [3, 3], RNN_SIZE // 4)
             pool1 = layers.max_pool2d(inputs=conv1b, kernel_size=[2, 2])
             return pool1
+        
+        #From here on, these are functions used for the relational module which were obtained from https://github.com/RLOpensource/Relational_Deep_Reinforcement_Learning/blob/5945fab3fe6c2f344ab7ac78c95c8d1aee7f6e3b/core.py
+        #Except the mlp function
+        
+        def flatten(nnk, shape):
+            flatten = tf.reshape(nnk, [-1, shape[1]*shape[2]*shape[3]])
+            return flatten
+        
+        def mlp(x): #this function was added as it was missing in the code I used
+            for i in range(2):
+                x = tf.layers.dense(inputs=x, units=x.get_shape()[2], activation=tf.nn.relu)
+            return x
+
+        def query_key_value(nnk, shape):
+            flatten = tf.reshape(nnk, [-1, shape[1]*shape[2], shape[3]])
+            after_layer = [tf.layers.dense(inputs=flatten, units=shape[3], activation=tf.nn.relu) for i in range(3)]
+
+            return after_layer[0], after_layer[1], after_layer[2], flatten
+
+        def self_attention(query, key, value):
+            key_dim_size = float(key.get_shape().as_list()[-1])
+            key = tf.transpose(key, perm=[0, 2, 1])
+            S = tf.matmul(query, key) / tf.sqrt(key_dim_size)
+            attention_weight = tf.nn.softmax(S)
+            A = tf.matmul(attention_weight, value)
+            shape = A.get_shape()
+            return A, attention_weight, [s.value for s in shape]
+        
+        def layer_normalization(x):
+            feature_shape = x.get_shape()[-1:]
+            mean, variance = tf.nn.moments(x, [2], keep_dims=True)
+            beta = tf.Variable(tf.zeros(feature_shape), trainable=False)
+            gamma = tf.Variable(tf.ones(feature_shape), trainable=False)
+            return gamma * (x - mean) / tf.sqrt(variance + 1e-8) + beta
+
+        def residual(x, inp, residual_time):
+            x = x + inp
+            x = layer_normalization(x)
+            return x
+
+        def feature_wise_max(x):
+            return tf.reduce_max(x, axis=2)
+
+        def relational_module(x):
+            shape = x.get_shape()
+            query, key, value, E = query_key_value(x, shape)
+            normalized_query = layer_normalization(query)
+            normalized_key = layer_normalization(key)
+            normalized_value = layer_normalization(value)
+            A, attention_weight, shape = self_attention(normalized_query, normalized_key, normalized_value)
+            A_mlp = mlp(A)
+            E_hat = residual(A_mlp, E, 2)
+            max_E_hat = feature_wise_max(E_hat)
+            return max_E_hat
 
         w_init = layers.variance_scaling_initializer()
         vgg1 = VGG_Block(inputs)
         vgg2 = VGG_Block(vgg1)
+        
+        if RELATIONAL_LEARNING:
+            vgg2 = relational_module(vgg2) #We add relational module in here
 
+        #An error occurs here because of the size
         conv3 = layers.conv2d(inputs=vgg2, padding="VALID", num_outputs=RNN_SIZE - GOAL_REPR_SIZE, kernel_size=[2, 2],
-                              stride=1, data_format="NHWC", weights_initializer=w_init, activation_fn=None)
+                              stride=1, data_format="NHWC", weights_initializer=w_init, activation_fn=None) 
 
         flat = tf.nn.relu(layers.flatten(conv3))
         goal_layer = layers.fully_connected(inputs=goal_pos, num_outputs=GOAL_REPR_SIZE)
