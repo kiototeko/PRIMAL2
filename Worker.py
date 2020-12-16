@@ -12,6 +12,10 @@ from od_mstar3 import cpp_mstar
 from GroupLock import Lock
 from operator import sub, add
 from warehouse_env import Action
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
+
 
 
 from parameters import *
@@ -123,6 +127,11 @@ class Worker():
     def imitation_learning_only(self, episode_count):      
         #print("start imitation")
         self.env.reset()
+        for i in range(1, self.num_workers+1):
+            new_goal_location = self.env.get_new_goal_location()
+            self.env.assign_goal(i-1,new_goal_location)
+            
+
         rollouts, targets_done = self.parse_path(episode_count)
 
         if rollouts is None:
@@ -167,7 +176,10 @@ class Worker():
                 if self.agentID == 1:
                     self.env.reset()
                     for i in range(1, self.num_workers+1):
+                        self.env.assign_goal(i-1,self.env.get_new_goal_location())
                         joint_observations[self.metaAgentID][i] = self.env._observe(i-1)
+         
+                    
 
                 self.synchronize()  # synchronize starting time of the threads
 
@@ -175,7 +187,8 @@ class Worker():
                 validActions = self.env.listValidActions(self.agentID-1) #Should we just ignore validActions?
                 
                 s = joint_observations[self.metaAgentID][self.agentID]
-                s[0] = self.env.obstacle_map #Substitute agent map for obstacle map
+                s = s[1:5] #We only use 4 of the channels
+                #s[0] = self.env.obstacle_map #Substitute agent map for obstacle map
                 goal_vector = self.goal_vector_calc(self.agentID)
                 
                 
@@ -205,7 +218,7 @@ class Worker():
                         saveGIF = True
                         self.nextGIF = episode_count + GIFS_FREQUENCY_RL
                         GIF_episode = int(episode_count)
-                        GIF_frames = [self.env._render()]
+                        GIF_frames = [self.env.render(zoom_size=30, agent_id=None)]
 
                     # start RL
                     finished = False
@@ -213,7 +226,7 @@ class Worker():
                         a_dist, v, rnn_state = self.sess.run([self.local_AC.policy,
                                                          self.local_AC.value,
                                                          self.local_AC.state_out],
-                                                        feed_dict={self.local_AC.inputs     : [s],  # state
+                                                        feed_dict={self.local_AC.inputs     : [s],  # state doesn't inclue agent map
                                                                    self.local_AC.goal_pos   : [goal_vector],  # goal vector
                                                                    self.local_AC.state_in[0]: rnn_state[0],
                                                                    self.local_AC.state_in[1]: rnn_state[1]})
@@ -239,21 +252,27 @@ class Worker():
                         # Make A Single Agent Gather All Information
 
                         self.synchronize()
+                        
+                        #print("current State: ", self.agentID, " state: ", self.env.agent_state[self.agentID-1])
+                        #print("agent: ", self.agentID, " action: ", Action(joint_actions[self.metaAgentID][self.agentID]))
 
                         if self.agentID == 1:
                             for i in range(1, self.num_workers+1):
-                                obs, reward, done, _ = self.env.step(self.agentID-1, Action(joint_actions[self.metaAgentID][i]))
+                                #print("Before agent: ", i-1, " goal: ", self.env.agent_goal[i-1], " state: ", self.env.agent_state[i-1], " action: ", Action(joint_actions[self.metaAgentID][i]))
+                                obs, reward, done, _ = self.env.step(i-1, Action(joint_actions[self.metaAgentID][i]).value)
+                                #print("After agent: ", i-1, " goal: ", self.env.agent_goal[i-1], " state: ", self.env.agent_state[i-1], " action: ", Action(joint_actions[self.metaAgentID][i]), " goal_vector: ", self.goal_vector_calc(i))
                                 joint_observations[self.metaAgentID][i] = obs
                                 joint_rewards[self.metaAgentID][i]      = reward
                                 joint_done[self.metaAgentID][i]         = done
                             if saveGIF and self.agentID == 1:
-                                GIF_frames.append(self.env._render())
+                                GIF_frames.append(self.env.render(zoom_size=30, agent_id=None))
 
                         self.synchronize()  # synchronize threads
 
                         # Get observation,reward, valid actions for each agent 
                         s1           = joint_observations[self.metaAgentID][self.agentID]
-                        s1[0] = self.env.obstacle_map #Substitute agent map for obstacle map
+                        s1 = s1[1:5]
+                        #s1[0] = self.env.obstacle_map #Substitute agent map for obstacle map
                         r            = copy.deepcopy(joint_rewards[self.metaAgentID][self.agentID]) 
                         validActions = self.env.listValidActions(self.agentID-1)
 
@@ -320,9 +339,8 @@ class Worker():
                         episode_finishes[self.metaAgentID].append(swarm_targets[self.metaAgentID])
 
                         if saveGIF:
-                            make_gif(np.array(GIF_frames),
-                                     '{}/episode_{:d}_{:d}_{:.1f}.gif'.format(gifs_path,GIF_episode, episode_step_count,
-                                                                           swarm_reward[self.metaAgentID]))
+                            #make_gif(np.array(GIF_frames),'{}/episode_{:d}_{:d}_{:.1f}.gif'.format(gifs_path,GIF_episode, episode_step_count,swarm_reward[self.metaAgentID]))
+                            make_gif(GIF_frames, '{}/episode_{:d}_{:d}_{:.1f}.gif'.format(gifs_path,GIF_episode, episode_step_count,swarm_reward[self.metaAgentID]))
 
                     self.synchronize()
 
@@ -392,7 +410,7 @@ class Worker():
         if np.random.rand() < IL_GIF_PROB : 
             saveGIF    =True     
         if saveGIF and OUTPUT_IL_GIFS:
-            GIF_frames = [self.env._render()] 
+            GIF_frames = [self.env.render(zoom_size=30, agent_id=None)] 
 
         single_done    = False 
         new_call       = False 
@@ -400,7 +418,9 @@ class Worker():
 
         for agentID in range(1, self.num_workers + 1):
             o[agentID] = self.env._observe(agentID-1)
-            o[agentID][0] = self.env.obstacle_map
+            #print(np.shape(o[agentID][1:5]))
+            #o[agentID][0] = self.env.obstacle_map
+            o[agentID] = o[agentID][1:5]
             goal_vector[agentID] = self.goal_vector_calc(agentID)
             train_imitation[agentID] = 1 
         step_count = 0
@@ -427,7 +447,6 @@ class Worker():
                     actions[agent_id] = self.env.dir2action(diff)
 
                 repeat_agents = list(range(self.num_workers))
-                #print("here")
                 #print(path)
                 #print(self.env.agent_state)
                 #print(actions)
@@ -441,7 +460,7 @@ class Worker():
                         agent_id = i+1
                         
                         pre_state = self.env.agent_state[agent_id-1]
-                        obs, r, done, _ = self.env.step(agent_id-1, actions[agent_id])
+                        obs, r, done, _ = self.env.step(agent_id-1, actions[agent_id].value)
                         if self.env.agent_state[agent_id-1] == pre_state and not actions[agent_id] == Action.NOOP: #this means that the agent couldn't move although it should
                             """
                             print(path)
@@ -455,7 +474,8 @@ class Worker():
                             repeat_agents.remove(agent_id-1)
                  
                             
-                        obs[0] = self.env.obstacle_map
+                        #obs[0] = self.env.obstacle_map
+                        obs = obs[1:5]
                         goal = self.goal_vector_calc(agent_id)
                         all_obs.append(obs)
                         all_goal_vectors.append(goal)
@@ -471,7 +491,7 @@ class Worker():
                                 new_call = True 
                 #print("there")
                 if saveGIF and OUTPUT_IL_GIFS:   
-                    GIF_frames.append(self.env._render())     
+                    GIF_frames.append(self.env.render(zoom_size=30, agent_id=None))     
                 if single_done and new_MSTAR_call :
                     path = self.expert_until_first_goal()   
                     if path is None :
@@ -507,8 +527,8 @@ class Worker():
                 new_call = False
                 new_MSTAR_call= False  
         if saveGIF and OUTPUT_IL_GIFS:          
-            make_gif(np.array(GIF_frames),
-                                     '{}/episodeIL_{}.gif'.format(gifs_path,episode_count))                                                                  
+            #make_gif(np.array(GIF_frames),'{}/episodeIL_{}.gif'.format(gifs_path,episode_count))                                                                  
+            make_gif(GIF_frames, '{}/episodeIL_{}.gif'.format(gifs_path,episode_count))
         return result, targets_done
 
     
@@ -588,3 +608,7 @@ class Worker():
             goal_vector[2] = 60
             
         return goal_vector
+    
+    
+def make_gif(frames, fname):
+    frames[0].save(fname, save_all=True, append_images=frames[1:], optimize=False, duration=100, loop=0)
