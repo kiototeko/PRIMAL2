@@ -19,11 +19,13 @@ class WarehouseEnv(gym.Env):
         assert obstacle_map.size == agent_map.size
 
         self.agent_state = {}
+        self.past_agent_state = {}
         self.agent_goal = {}
         rows, cols = np.nonzero(agent_map)
         for i, (row, col) in enumerate(zip(rows, cols)):
             self.agent_state[i] = (row, col)
             self.agent_goal[i] = None
+            self.past_agent_state[i] = None
 
         self.n_agents = len(self.agent_state)
         self.obstacle_map = obstacle_map
@@ -94,15 +96,23 @@ class WarehouseEnv(gym.Env):
             s_prime = row, col
         else:
             raise ValueError("Invalid action.")
+        
+        tmp_state = self.agent_state[agent]
         if not self._occupied(*s_prime):
             self.agent_state[agent] = s_prime
+            if self.past_agent_state[agent] != None and self.agent_state[agent] == self.past_agent_state[agent]:
+                reward = -2.0
+            else:
+                reward = -0.3
         else:
-            reward = -0.3
-
+            reward = -0.5
+            
+        self.past_agent_state[agent] = tmp_state
+        
         observation = self._observe(agent)
-        reward = 0
+        
         if self.agent_state[agent] == self.agent_goal[agent]:
-            reward = 5
+            reward = 20.0
             # Lazy retry, fix me
             new_goal_location_occupied = True
             while_count = 0
@@ -136,11 +146,13 @@ class WarehouseEnv(gym.Env):
         
     def reset(self):
         self.agent_state = {}
+        self.past_agent_state = {}
         self.agent_goal = {}
         rows, cols = np.nonzero(self.agent_map)
         for i, (row, col) in enumerate(zip(rows, cols)):
             self.agent_state[i] = (row, col)
             self.agent_goal[i] = None
+            self.past_agent_state[i] = None
         return self._observe(agent = 0)
 
     def render(self, mode="human", zoom_size=8, agent_id=0, other_agents_same=False):
