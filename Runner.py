@@ -228,13 +228,13 @@ class imitationRunner(Runner):
         super().__init__(metaAgentID)
 
 """ Original
-@ray.remote(num_cpus=2.0/(NUM_META_AGENTS - NUM_IL_META_AGENTS))
+@ray.remote(num_cpus=3, num_gpus= 1.0 / (NUM_META_AGENTS - NUM_IL_META_AGENTS + 1))
 class RLRunner(Runner):
     def __init__(self, metaAgentID):        
         super().__init__(metaAgentID)
 
 
-@ray.remote(num_cpus=1.0/NUM_IL_META_AGENTS, num_gpus=0)
+@ray.remote(num_cpus=1, num_gpus=0)
 class imitationRunner(Runner):
     def __init__(self, metaAgentID):        
         super().__init__(metaAgentID)
